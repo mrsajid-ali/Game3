@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BubbleCash Pro - Final Game</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(to bottom, #2c3e50, #3498db); color: white; text-align: center; padding: 20px; margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        h1 { color: #ecf0f1; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        #gameArea { margin: 20px auto; width: 320px; height: 450px; border: 5px solid #ecf0f1; border-radius: 20px; background: rgba(0, 0, 0, 0.2); position: relative; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .bubble { width: 35px; height: 35px; border-radius: 50%; position: absolute; box-shadow: inset 0 0 10px rgba(255,255,255,0.5); will-change: transform; }
+        button { padding: 12px 25px; margin: 15px 10px; font-size: 16px; border: none; border-radius: 10px; background: #e74c3c; color: white; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button:hover:not(:disabled) { background: #c0392b; transform: translateY(-2px); }
+        button:disabled { background: #95a5a6; cursor: not-allowed; transform: none; }
+        #connectBtn { background: #2980b9; }
+        #connectBtn:hover:not(:disabled) { background: #3498db; }
+        #walletInfo { margin-top: 15px; font-weight: bold; color: #bdc3c7; background: rgba(0,0,0,0.2); padding: 8px 15px; border-radius: 8px; min-height: 24px; }
+        #stats { font-size: 18px; margin-top: 10px; color: #ecf0f1; background: rgba(0,0,0,0.25); padding: 10px 20px; border-radius: 10px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <h1>BubbleCash Pro</h1>
+    <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+    <p id="walletInfo">Wallet not connected</p>
+    <div id="stats">
+        Coins: <span id="coinCount">0</span> | USDT: <span id="tokenValue">0.00</span>
+    </div>
+    <div id="gameArea"></div>
+    <button id="withdrawBtn" onclick="withdraw()" disabled>Withdraw USDT</button>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+    <script>
+        const contractAddress = "0x228E679F3fbc0a4c17CCb0F797d716d2d550fA93";
+        const contractABI = [ { "inputs": [ { "internalType": "address", "name": "_tokenAddress", "type": "address" } ], "stateMutability": "nonpayable", "type": "constructor" }, { "anonymous": false, "inputs": [ { "indexed": true, "internalType": "address", "name": "to", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" } ], "name": "TokensWithdrawn", "type": "event" }, { "inputs": [ { "internalType": "address", "name": "_to", "type": "address" }, { "internalType": "uint256", "name": "_amount", "type": "uint256" } ], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [], "name": "owner", "outputs": [ { "internalType": "address", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "token", "outputs": [ { "internalType": "contract IMinimalERC20", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function" } ];
+        let provider, web3, account, coins = 0;
+        const coinToTokenRate = 1000;
+        let bubbles = [];
+        const bubbleColors = [ 'radial-gradient(circle, #ff7e5f, #feb47b)', 'radial-gradient(circle, #a8ff78, #78ffd6)', 'radial-gradient(circle, #f857a6, #ff5858)', 'radial-gradient(circle, #e0c3fc, #8ec5fc)', 'radial-gradient(circle, #f093fb, #f5576c)', 'radial-gradient(circle, #4facfe, #00f2fe)' ];
+        const walletInfoEl = document.getElementById('walletInfo'), coinCountEl = document.getElementById('coinCount'), tokenValueEl = document.getElementById('tokenValue'), withdrawBtnEl = document.getElementById('withdrawBtn'), gameAreaEl = document.getElementById('gameArea'), connectBtnEl = document.getElementById('connectBtn');
+        window.onload = function() { if (window.ethereum && window.ethereum.selectedAddress) connectWallet(); initializeGame(); };
+        async function connectWallet() { if (window.ethereum) { try { provider = window.ethereum; const accounts = await provider.request({ method: 'eth_requestAccounts' }); account = accounts[0]; web3 = new Web3(provider); await switchToBSC(); setupListeners(); updateWalletInfo(); connectBtnEl.innerText = 'Connected'; connectBtnEl.disabled = true; } catch (error) { walletInfoEl.innerText = "Connection failed."; } } else { alert("Please use MetaMask or Trust Wallet's DApp browser!"); } }
+        function setupListeners() { provider.on('accountsChanged', (a) => { account = a[0] || null; updateWalletInfo(); if(!account) window.location.reload(); }); provider.on('chainChanged', () => window.location.reload()); }
+        async function switchToBSC() { if (await web3.eth.getChainId() !== 56) { try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] }); } catch (e) { if (e.code === 4902) await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0x38', chainName: 'Binance Smart Chain', rpcUrls: ['https://bsc-dataseed.binance.org/'], nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 }, blockExplorerUrls: ['https://bscscan.com'] }] }); } } }
+        function updateWalletInfo() { if (account) walletInfoEl.innerHTML = `Connected: ${account.substring(0, 6)}...${account.substring(38)}`; else { walletInfoEl.innerText = "Wallet not connected"; connectBtnEl.innerText = 'Connect Wallet'; connectBtnEl.disabled = false; } }
+        function initializeGame() { for (let i = 0; i < 7; i++) createBubble(); animate(); }
+        function createBubble() { const b = { element: document.createElement('div'), radius: 17.5 }; b.element.className = 'bubble'; b.x = Math.random() * (gameAreaEl.clientWidth - 35) + 17.5; b.y = Math.random() * (gameAreaEl.clientHeight - 35) + 17.5; b.dx = (Math.random() - 0.5) * 2; b.dy = (Math.random() - 0.5) * 2; b.element.style.background = bubbleColors[Math.floor(Math.random() * bubbleColors.length)]; gameAreaEl.appendChild(b.element); bubbles.push(b); }
+        function animate() { bubbles.forEach((b, i) => { b.x += b.dx; b.y += b.dy; if (b.x > 302.5 || b.x < 17.5) b.dx *= -1; if (b.y > 432.5 || b.y < 17.5) b.dy *= -1; for (let j = i + 1; j < bubbles.length; j++) { if (Math.hypot(b.x - bubbles[j].x, b.y - bubbles[j].y) < 35) { coins += 100; updateCoinDisplay(); b.element.remove(); bubbles[j].element.remove(); bubbles.splice(j, 1); bubbles.splice(i, 1); createBubble(); createBubble(); return; } } b.element.style.transform = `translate(${b.x - 17.5}px, ${b.y - 17.5}px)`; }); requestAnimationFrame(animate); }
+        function updateCoinDisplay() { coinCountEl.innerText = coins; tokenValueEl.innerText = (coins / coinToTokenRate).toFixed(3); withdrawBtnEl.disabled = coins < coinToTokenRate; }
+        
+        // ===== YEH HAI SAHI WITHDRAW FUNCTION =====
+        async function withdraw() {
+            if (!account) { alert("Please connect your wallet first."); return; }
+            if (coins < coinToTokenRate) { alert("You don't have enough coins to withdraw."); return; }
+            const contract = new web3.eth.Contract(contractABI, contractAddress);
+            const amountInWei = web3.utils.toWei((coins / coinToTokenRate).toString(), 'ether');
+            withdrawBtnEl.disabled = true;
+            withdrawBtnEl.innerText = "Processing...";
+            try {
+                // Hum contract ko bata rahe hain ke paisay `account` (aap ke apne wallet) par bhejo
+                await contract.methods.withdraw(account, amountInWei).send({ from: account });
+                alert(`Withdrawal successful!`);
+                coins = 0;
+                updateCoinDisplay();
+            } catch (error) {
+                alert(`Withdrawal failed. Please check the console for details.`);
+                console.error("Withdrawal Error:", error);
+            } finally {
+                withdrawBtnEl.disabled = coins < coinToTokenRate;
+                withdrawBtnEl.innerText = "Withdraw USDT";
+            }
+        }
+    </script>
+</body>
+</html>
